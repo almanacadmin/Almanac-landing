@@ -1,7 +1,10 @@
 {
   "name": "almanac-landing",
   "compatibility_date": "2026-07-15",
+  "main": "src/index.js",
   "assets": {
-    "directory": "./"
-  }
+    "directory": "./",
+    "binding": "ASSETS"
+  },
+  "run_worker_first": true
 }
