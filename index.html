@@ -130,7 +130,8 @@
 
   .phrase-bottom {
     bottom: 17%;
-    font-size: clamp(15px, 1.6vw, 20px);
+    font-size: clamp(17px, 1.9vw, 24px); /* matches phrase-top — verified the wider
+      max-width below still holds this line to exactly 2 lines at full size */
     max-width: min(760px, 88vw); /* wider than the shared .phrase default — this line is
       longer than phrase-top and needs the extra room to hold exactly 2 lines instead of 3 */
   }
