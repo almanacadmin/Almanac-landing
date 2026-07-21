@@ -9,8 +9,14 @@
   // use different particle sizing/touch-target numbers, so serving the right file
   // matters more than trying to make one file cover both well.
   (function () {
+    // Uses pointer:coarse (the primary input's actual precision) rather than
+    // 'ontouchstart' in window or navigator.maxTouchPoints — both of those are
+    // known-unreliable: many real desktop browsers expose them as true/truthy
+    // regardless of whether the device actually has touch, which would wrongly
+    // redirect ordinary desktop visitors with a browser window in the 820-900px
+    // range to the mobile build.
     var isMobile = window.matchMedia('(max-width: 820px)').matches ||
-                   (('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 900);
+                   (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900);
     if (isMobile) {
       location.replace('mobile.html');
     }
@@ -570,6 +576,113 @@ function loop(ts) {
 
 const topPhraseEl = document.querySelector('.phrase-top');
 const bottomPhraseEl = document.querySelector('.phrase-bottom');
+
+/* Live auto-fit sizing, replacing/backstopping the static CSS clamp() values above.
+   Those clamp() numbers were tuned against a *proxy* font at a handful of sample
+   widths — reasonable, but still a guess. This instead measures the real rendered
+   width of the real text in the real loaded "Inter Tight" webfont, at whatever the
+   device's actual width is right now, and binary-searches the largest font-size
+   that still fits every line within its container. Runs once fonts are confirmed
+   loaded, and again on resize, so it self-corrects on any window size instead of
+   relying on pre-computed breakpoints. The CSS clamp() values remain as the
+   fallback for the brief moment before this runs, or if JS is unavailable. */
+(function setupAutoFitText() {
+  const measureCanvas = document.createElement('canvas');
+  const mctx = measureCanvas.getContext('2d');
+
+  function htmlToText(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    return d.textContent;
+  }
+
+  function getLines(el) {
+    // Splits on manual <br> tags in the markup and decodes entities (&nbsp; etc.)
+    // for each resulting piece.
+    return el.innerHTML.split(/<br\s*\/?>/i).map(htmlToText);
+  }
+
+  function measureWidth(text, fontPx) {
+    mctx.font = `300 ${fontPx}px 'Inter Tight'`;
+    return mctx.measureText(text).width;
+  }
+
+  function fitFontSize(items, minPx, maxPx) {
+    // items: [{ text, maxWidth }, ...] — finds the largest shared size where every
+    // item's text fits within its own container's max-width.
+    let lo = minPx, hi = maxPx;
+    for (let i = 0; i < 22; i++) {
+      const mid = (lo + hi) / 2;
+      const fits = items.every(it => measureWidth(it.text, mid) <= it.maxWidth);
+      if (fits) lo = mid; else hi = mid;
+    }
+    return Math.floor(lo * 10) / 10; // round down slightly, never up past the fit point
+  }
+
+  function apply() {
+    const topMaxWidth = parseFloat(getComputedStyle(topPhraseEl).maxWidth);
+    const bottomMaxWidth = parseFloat(getComputedStyle(bottomPhraseEl).maxWidth);
+
+    const items = [
+      { text: htmlToText(topPhraseEl.innerHTML), maxWidth: topMaxWidth },
+      ...getLines(bottomPhraseEl).map(text => ({ text, maxWidth: bottomMaxWidth })),
+    ];
+
+    let size = fitFontSize(items, 8, 24);
+
+    /* Vertical constraint. The check above only asks "does this font fit the width
+       of its line" — fine on typical desktop windows, but on a short/wide window
+       (or an ultrawide monitor with a shallow browser height) it happily returns a
+       large size since there's plenty of width, and that large text block then
+       doesn't fit the short vertical space and overlaps the particle mark. Compute
+       the actual vertical room between each tagline's CSS anchor (top:17% /
+       bottom:17%, matching the stylesheet) and the mark's real bounds (ly.cy ±
+       ly.slashSize/2, the same values the particle system itself uses), and cap the
+       font size to whatever both taglines can fit within, with a small breathing-
+       room pad so text doesn't touch the mark edge exactly. */
+    const H = window.innerHeight;
+    const layoutNow = (typeof ly !== 'undefined' && ly) ? ly : layout();
+    const PAD = 10;
+    const LINE_HEIGHT = 1.5;
+    const topAnchorPx = 0.17 * H;
+    const bottomAnchorPx = H - 0.17 * H;
+    const markTop = layoutNow.cy - layoutNow.slashSize / 2;
+    const markBottom = layoutNow.cy + layoutNow.slashSize / 2;
+
+    const topVerticalRoom = markTop - topAnchorPx - PAD;
+    const bottomVerticalRoom = bottomAnchorPx - markBottom - PAD;
+
+    const topMaxByHeight = topVerticalRoom / (LINE_HEIGHT * 1);   // top phrase: 1 line
+    const bottomMaxByHeight = bottomVerticalRoom / (LINE_HEIGHT * 2); // bottom phrase: 2 lines
+
+    size = Math.min(size, topMaxByHeight, bottomMaxByHeight);
+    size = Math.max(size, 8); // never collapse below a legible floor even in extreme cases
+
+    topPhraseEl.style.fontSize = size + 'px';
+    bottomPhraseEl.style.fontSize = size + 'px';
+  }
+
+  function ready() {
+    if (document.fonts && document.fonts.load) {
+      // Explicitly request the exact weight/family used, so .ready doesn't resolve
+      // before this specific font has actually finished loading.
+      Promise.all([
+        document.fonts.load("300 16px 'Inter Tight'"),
+        document.fonts.ready,
+      ]).then(apply).catch(apply);
+    } else {
+      apply();
+    }
+  }
+
+  ready();
+  let resizeT;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(apply, 120);
+  });
+})();
+
 const REVEAL_SMALL = { w: 200, h: 260 };
 const REVEAL_BIG   = { w: 380, h: 320 };
 const TEXT_ZONE_PAD = 180; // generous padding around each tagline's own box — "near enough" to count
