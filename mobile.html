@@ -198,14 +198,14 @@
        in the markup) — height = 2 * (9px * 1.4 line-height) ≈ 25px. Its top edge
        therefore sits at 28px + 25px = 53px from the page bottom. True midpoint
        between the tagline's bottom (17%) and the copyright's top (53px) =
-       (17% + 53px) / 2 = 8.5% + 26.5px. Monogram is 66px tall, so its own bottom
-       edge = that midpoint minus half its height (33px) = 8.5% + 26.5px − 33px
-       = 8.5% − 6.5px. */
+       (17% + 53px) / 2 = 8.5% + 26.5px. Monogram is 44px tall, so its own bottom
+       edge = that midpoint minus half its height (22px) = 8.5% + 26.5px − 22px
+       = 8.5% + 4.5px. */
     position: absolute;
-    bottom: calc(8.5% - 6.5px);
+    bottom: calc(8.5% + 4.5px);
     left: 50%;
     transform: translateX(-50%);
-    height: 66px; /* 3x the original 22px */
+    height: 44px; /* 2x the original 22px */
     width: auto;
     display: block;
   }
@@ -491,8 +491,23 @@ const PHASES = ['slash', 'full', 'comingsoon'];
 const OLD_COMINGSOON_ASPECT = 3385 / 620;
 
 function layout() {
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  /* Without this, the canvas backing store is sized in CSS pixels 1:1, so on a
+     high-DPI phone screen (devicePixelRatio 2-3 — the norm on virtually every modern
+     phone) the ~1-2px particle dots render at roughly half or a third of the
+     screen's actual pixel density, looking visibly soft/blurry compared to the
+     crisp CSS-rendered text elsewhere on the page. Scaling the backing store up by
+     dpr and compensating with ctx.setTransform keeps every existing draw call's
+     coordinates in CSS-pixel-space (no other code needs to change) while actually
+     using the display's full resolution. */
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   const slashSize = Math.min(H * 0.42, 320);
   const fullWidth = Math.min(W * 0.86, 640);
   const comingSoonWidthBudget = Math.min(W * 0.86, 640);
