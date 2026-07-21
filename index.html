@@ -191,13 +191,13 @@
     /* Tagline's bottom edge sits at 17% from the page bottom (see .phrase-bottom).
        Copyright line's top edge sits at 28px + (9px * 1.4 line-height ≈ 13px) = 41px
        from the page bottom. True midpoint between those two = (17% + 41px) / 2 =
-       8.5% + 20.5px. Monogram is 66px tall, so its bottom edge = that midpoint minus
-       half its own height (33px) = 8.5% + 20.5px − 33px = 8.5% − 12.5px. */
+       8.5% + 20.5px. Monogram is 44px tall, so its bottom edge = that midpoint minus
+       half its own height (22px) = 8.5% + 20.5px − 22px = 8.5% − 1.5px. */
     position: absolute;
-    bottom: calc(8.5% - 12.5px);
+    bottom: calc(8.5% - 1.5px);
     left: 50%;
     transform: translateX(-50%);
-    height: 66px; /* 3x the original 22px */
+    height: 44px; /* 2x the original 22px */
     width: auto;
     display: block;
   }
@@ -480,8 +480,23 @@ const PHASES = ['slash', 'full', 'comingsoon'];
 const OLD_COMINGSOON_ASPECT = 3385 / 620;
 
 function layout() {
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  /* Without this, the canvas backing store is sized in CSS pixels 1:1, so on a
+     Retina/high-DPI display (devicePixelRatio 2-3 — the default on virtually every
+     modern MacBook and many Windows laptops) the ~1-2px particle dots render at
+     roughly half or a third of the screen's actual pixel density, looking visibly
+     soft/blurry compared to the crisp CSS-rendered text elsewhere on the page.
+     Scaling the backing store up by dpr and compensating with ctx.setTransform
+     keeps every existing draw call's coordinates in CSS-pixel-space (no other code
+     needs to change) while actually using the display's full resolution. */
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   const slashSize = Math.min(H * 0.5, 460);
   const fullWidth = Math.min(W * 0.72, 860);
   const comingSoonWidthBudget = Math.min(W * 0.72, 860);
